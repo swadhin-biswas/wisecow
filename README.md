@@ -88,8 +88,8 @@ machine that holds the kubeconfig.
 | `DEPLOY_OVERLAY` | `prod` | overlay directory to apply |
 | `WISECOW_HOST` | unset | hostname used in the workflow summary |
 
-Images are published as `ghcr.io/swadhinbiswas/wisecow:latest` and
-`ghcr.io/swadhinbiswas/wisecow:sha-<commit>`.
+Images are published as `ghcr.io/swadhin-biswas/wisecow:latest` and
+`ghcr.io/swadhin-biswas/wisecow:sha-<commit>`.
 
 ## Ops scripts
 

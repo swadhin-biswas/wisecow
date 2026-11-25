@@ -30,7 +30,7 @@ spec:
           type: RuntimeDefault
       containers:
         - name: wisecow
-          image: ghcr.io/swadhinbiswas/wisecow:latest
+          image: ghcr.io/swadhin-biswas/wisecow:latest
           imagePullPolicy: IfNotPresent
           ports:
             - name: http

@@ -6,6 +6,6 @@ resources:
   - certificates.yaml
 
 images:
-  - name: ghcr.io/swadhinbiswas/wisecow
+  - name: ghcr.io/swadhin-biswas/wisecow
     newName: wisecow
     newTag: local

@@ -4,7 +4,7 @@ ARG GIT_SHA=dev
 
 LABEL org.opencontainers.image.title="wisecow" \
       org.opencontainers.image.description="Cow wisdom served over HTTP" \
-      org.opencontainers.image.source="https://github.com/swadhinbiswas/wisecow" \
+      org.opencontainers.image.source="https://github.com/swadhin-biswas/wisecow" \
       org.opencontainers.image.revision="${GIT_SHA}" \
       org.opencontainers.image.licenses="Apache-2.0"
 
