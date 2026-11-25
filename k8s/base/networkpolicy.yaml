@@ -1,0 +1,33 @@
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: wisecow
+  labels:
+    app.kubernetes.io/name: wisecow
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: wisecow
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    # Only the ingress controller needs to reach the app. kubelet probes are
+    # host traffic and are allowed ahead of policy by most CNIs, see NOTES.
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: ingress-nginx
+      ports:
+        - protocol: TCP
+          port: 4499
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
