@@ -1,0 +1,156 @@
+name: ci-cd
+
+on:
+  push:
+    branches:
+      - main
+    tags:
+      - "v*"
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+
+jobs:
+  lint:
+    name: lint
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    concurrency:
+      group: lint-${{ github.ref }}
+      cancel-in-progress: true
+    steps:
+      - name: Check out
+        uses: actions/checkout@v4
+
+      - name: Lint the Dockerfile
+        run: |
+          curl -fsSLo /tmp/hadolint https://github.com/hadolint/hadolint/releases/download/v2.15.1/hadolint-linux-x86_64
+          chmod +x /tmp/hadolint
+          /tmp/hadolint --failure-threshold error Dockerfile
+
+      - name: Lint the shell scripts
+        run: shellcheck scripts/*.sh
+
+      - name: Check Python syntax
+        run: python3 -m py_compile scripts/log_analyzer.py
+
+      - name: Validate the Kubernetes manifests
+        run: |
+          curl -fsSLo /tmp/kubeconform.tar.gz https://github.com/yannh/kubeconform/releases/download/v0.8.0/kubeconform-linux-amd64.tar.gz
+          tar -xzf /tmp/kubeconform.tar.gz -C /tmp
+          /tmp/kubeconform -strict -ignore-missing-schemas -summary \
+            -kubernetes-version 1.33.0 k8s/base k8s/overlays
+
+  build:
+    name: build image
+    needs: lint
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    concurrency:
+      group: build-${{ github.ref }}
+      cancel-in-progress: true
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      digest: ${{ steps.push.outputs.digest }}
+    steps:
+      - name: Check out
+        uses: actions/checkout@v4
+
+      - name: Set up Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        if: github.event_name != 'pull_request'
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Work out the image tags
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=sha,format=short
+            type=ref,event=branch
+            type=raw,value=latest,enable={{is_default_branch}}
+            type=semver,pattern={{version}}
+
+      - name: Build and push
+        id: push
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: ${{ github.event_name != 'pull_request' }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          build-args: |
+            GIT_SHA=${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          provenance: ${{ github.event_name != 'pull_request' }}
+          sbom: ${{ github.event_name != 'pull_request' }}
+
+  deploy:
+    name: deploy
+    needs: build
+    if: github.ref == 'refs/heads/main' && vars.DEPLOY_ENABLED == 'true'
+    runs-on: [self-hosted, linux, x64]
+    timeout-minutes: 15
+    concurrency:
+      group: deploy-production
+      cancel-in-progress: false
+    environment:
+      name: production
+    permissions:
+      contents: read
+    env:
+      DEPLOY_OVERLAY: ${{ vars.DEPLOY_OVERLAY || 'prod' }}
+    steps:
+      - name: Check out
+        uses: actions/checkout@v4
+
+      - name: Apply the manifests
+        run: |
+          case "${DEPLOY_OVERLAY}" in
+            local | prod) ;;
+            *)
+              echo "DEPLOY_OVERLAY must be local or prod, got '${DEPLOY_OVERLAY}'" >&2
+              exit 1
+              ;;
+          esac
+          kubectl apply -k "k8s/overlays/${DEPLOY_OVERLAY}"
+
+      - name: Pin the deployment to the image that was just built
+        env:
+          IMAGE: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          DIGEST: ${{ needs.build.outputs.digest }}
+        run: |
+          if [[ ! "$DIGEST" =~ ^sha256:[0-9a-f]{64}$ ]]; then
+            echo "unexpected digest from the build job: '${DIGEST}'" >&2
+            exit 1
+          fi
+          kubectl -n wisecow set image deployment/wisecow "wisecow=${IMAGE}@${DIGEST}"
+
+      - name: Wait for the rollout
+        run: kubectl -n wisecow rollout status deployment/wisecow --timeout=180s
+
+      - name: Add a run summary
+        env:
+          HOST: ${{ vars.WISECOW_HOST }}
+        run: |
+          if [[ -n "$HOST" ]]; then
+            printf 'Deployed https://%s/\n' "$HOST" >> "$GITHUB_STEP_SUMMARY"
+          fi
