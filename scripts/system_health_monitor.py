@@ -31,7 +31,8 @@ def cpu_percent(total_a, idle_a, total_b, idle_b):
     if total_delta <= 0:
         return 0
     idle_delta = idle_b - idle_a
-    return round(100 * (total_delta - idle_delta) / total_delta)
+    usage = round(100 * (total_delta - idle_delta) / total_delta)
+    return max(0, min(100, usage))
 
 
 def sample_cpu(seconds):
@@ -61,14 +62,16 @@ def memory_percent(text):
         available = info.get("MemFree", 0) + info.get("Buffers", 0) + info.get("Cached", 0)
     if total <= 0:
         return 0
-    return round(100 * (total - available) / total)
+    usage = round(100 * (total - available) / total)
+    return max(0, min(100, usage))
 
 
 def disk_percent(path):
     usage = shutil.disk_usage(path)
     if usage.total <= 0:
         return 0
-    return round(100 * usage.used / usage.total)
+    percent = round(100 * usage.used / usage.total)
+    return max(0, min(100, percent))
 
 
 def stat_state(line):
@@ -193,39 +196,28 @@ def build_metrics(args):
     return metrics
 
 
-def env_int(name, fallback):
-    raw = os.environ.get(name)
-    if raw is None:
-        return fallback
-    try:
-        return int(raw)
-    except ValueError:
-        print(f"{name} must be a whole number, got '{raw}'", file=sys.stderr)
-        raise SystemExit(2)
-
-
 def build_parser():
     parser = argparse.ArgumentParser(
         prog="system_health_monitor.py",
         description="Check Linux health metrics and alert when a threshold is crossed."
     )
     parser.add_argument("--cpu-threshold", type=int,
-                        default=env_int("CPU_THRESHOLD", 80),
+                        default=os.environ.get("CPU_THRESHOLD", "80"),
                         help="cpu percent, default 80")
     parser.add_argument("--mem-threshold", type=int,
-                        default=env_int("MEM_THRESHOLD", 80),
+                        default=os.environ.get("MEM_THRESHOLD", "80"),
                         help="memory percent, default 80")
     parser.add_argument("--disk-threshold", type=int,
-                        default=env_int("DISK_THRESHOLD", 85),
+                        default=os.environ.get("DISK_THRESHOLD", "85"),
                         help="disk percent, default 85")
     parser.add_argument("--process-threshold", type=int,
-                        default=env_int("PROCESS_THRESHOLD", 400),
+                        default=os.environ.get("PROCESS_THRESHOLD", "400"),
                         help="process count, default 400")
     parser.add_argument("--zombie-threshold", type=int,
-                        default=env_int("ZOMBIE_THRESHOLD", 5),
+                        default=os.environ.get("ZOMBIE_THRESHOLD", "5"),
                         help="zombie count, default 5")
     parser.add_argument("--sample-seconds", type=float,
-                        default=float(os.environ.get("SAMPLE_SECONDS", "1")),
+                        default=os.environ.get("SAMPLE_SECONDS", "1"),
                         help="cpu sample window, default 1")
     parser.add_argument("--disk-path", default=os.environ.get("DISK_PATH", "/"),
                         help="filesystem to check, default /")

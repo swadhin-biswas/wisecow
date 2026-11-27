@@ -3,10 +3,12 @@
 
 import contextlib
 import io
+import os
 import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "scripts"))
@@ -24,6 +26,8 @@ class HealthMonitorTests(unittest.TestCase):
     def test_cpu_percent(self):
         self.assertEqual(monitor.cpu_percent(100, 40, 200, 90), 50)
         self.assertEqual(monitor.cpu_percent(100, 40, 100, 40), 0)
+        self.assertEqual(monitor.cpu_percent(0, 0, 10, 20), 0)
+        self.assertEqual(monitor.cpu_percent(0, 0, 10, 0), 100)
 
     def test_memory_percent(self):
         text = "MemTotal: 1000 kB\nMemAvailable: 250 kB\n"
@@ -86,6 +90,13 @@ class HealthMonitorTests(unittest.TestCase):
         with contextlib.redirect_stderr(io.StringIO()):
             with self.assertRaises(SystemExit) as caught:
                 monitor.main(["--cpu-threshold", "101"])
+        self.assertEqual(caught.exception.code, 2)
+
+    def test_invalid_env_threshold(self):
+        with mock.patch.dict(os.environ, {"CPU_THRESHOLD": "abc"}):
+            with contextlib.redirect_stderr(io.StringIO()):
+                with self.assertRaises(SystemExit) as caught:
+                    monitor.main([])
         self.assertEqual(caught.exception.code, 2)
 
 
