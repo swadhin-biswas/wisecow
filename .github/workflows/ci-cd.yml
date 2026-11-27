@@ -151,7 +151,16 @@ jobs:
           kubectl -n wisecow wait --for=condition=Ready certificate/wisecow-tls --timeout=180s
 
       - name: Verify HTTPS
-        run: make verify
+        run: |
+          for attempt in $(seq 1 12); do
+            if make verify; then
+              exit 0
+            fi
+            echo "attempt ${attempt} failed, retrying in 5s" >&2
+            sleep 5
+          done
+          echo "HTTPS verification did not pass in 60s" >&2
+          exit 1
 
       - name: Show the deployed state
         if: always()
