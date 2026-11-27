@@ -107,7 +107,8 @@ REQUIRED_PROCESSES="sshd,cron" ./scripts/system_health_monitor.py
 ```
 
 Exit code 0 means healthy, 1 means at least one alert, 2 means bad settings.
-Thresholds can be flags or environment variables, listed in `--help`.
+Thresholds can be flags or environment variables. `--help` shows the flag and
+the matching environment name for each one.
 
 ### Access log analyzer
 

@@ -203,28 +203,28 @@ def build_parser():
     )
     parser.add_argument("--cpu-threshold", type=int,
                         default=os.environ.get("CPU_THRESHOLD", "80"),
-                        help="cpu percent, default 80")
+                        help="cpu percent, env CPU_THRESHOLD, default 80")
     parser.add_argument("--mem-threshold", type=int,
                         default=os.environ.get("MEM_THRESHOLD", "80"),
-                        help="memory percent, default 80")
+                        help="memory percent, env MEM_THRESHOLD, default 80")
     parser.add_argument("--disk-threshold", type=int,
                         default=os.environ.get("DISK_THRESHOLD", "85"),
-                        help="disk percent, default 85")
+                        help="disk percent, env DISK_THRESHOLD, default 85")
     parser.add_argument("--process-threshold", type=int,
                         default=os.environ.get("PROCESS_THRESHOLD", "400"),
-                        help="process count, default 400")
+                        help="process count, env PROCESS_THRESHOLD, default 400")
     parser.add_argument("--zombie-threshold", type=int,
                         default=os.environ.get("ZOMBIE_THRESHOLD", "5"),
-                        help="zombie count, default 5")
+                        help="zombie count, env ZOMBIE_THRESHOLD, default 5")
     parser.add_argument("--sample-seconds", type=float,
                         default=os.environ.get("SAMPLE_SECONDS", "1"),
-                        help="cpu sample window, default 1")
+                        help="cpu sample window, env SAMPLE_SECONDS, default 1")
     parser.add_argument("--disk-path", default=os.environ.get("DISK_PATH", "/"),
-                        help="filesystem to check, default /")
+                        help="filesystem to check, env DISK_PATH, default /")
     parser.add_argument("--log-file", default=os.environ.get("LOG_FILE", "system-health.log"),
-                        help="default ./system-health.log")
+                        help="log file, env LOG_FILE, default ./system-health.log")
     parser.add_argument("--required-processes", default=os.environ.get("REQUIRED_PROCESSES", ""),
-                        help="comma separated process names that must run")
+                        help="required process names, env REQUIRED_PROCESSES")
     parser.add_argument("--json", action="store_true", help="print the result as JSON")
     return parser
 
