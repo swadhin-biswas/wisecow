@@ -36,11 +36,11 @@ jobs:
           chmod +x /tmp/hadolint
           /tmp/hadolint --failure-threshold error Dockerfile
 
-      - name: Lint the shell scripts
-        run: shellcheck scripts/*.sh
-
       - name: Check Python syntax
-        run: python3 -m py_compile scripts/log_analyzer.py
+        run: python3 -m compileall -q scripts tests
+
+      - name: Run the tests
+        run: python3 -m unittest discover -s tests -v
 
       - name: Validate the Kubernetes manifests
         run: |

@@ -72,7 +72,7 @@ needs public DNS for that name and port 80 reachable from the internet.
 `.github/workflows/ci-cd.yml` runs on pushes to `main`, on pull requests and on
 manual dispatch.
 
-1. `lint`: hadolint, shellcheck, Python syntax check and kubeconform
+1. `lint`: hadolint, Python compile check, unit tests and kubeconform
 2. `build`: Buildx build, push to GHCR with `sha-*`, branch and semver tags,
    provenance and SBOM
 3. `deploy`: apply the selected overlay and pin the deployment to the digest
@@ -95,18 +95,19 @@ Images are published as `ghcr.io/swadhin-biswas/wisecow:latest` and
 
 ### System health monitor
 
-`scripts/system_health_monitor.sh` samples CPU over one second, reads memory
+`scripts/system_health_monitor.py` samples CPU over one second, reads memory
 and disk, counts processes and zombies, and writes a single summary line to a
 log. A metric over its threshold becomes an `ALERT` line on stderr as well.
 
 ```
-./scripts/system_health_monitor.sh
-CPU_THRESHOLD=85 DISK_PATH=/var LOG_FILE=/var/log/health.log ./scripts/system_health_monitor.sh
-REQUIRED_PROCESSES="sshd,cron" ./scripts/system_health_monitor.sh
+./scripts/system_health_monitor.py
+CPU_THRESHOLD=85 DISK_PATH=/var LOG_FILE=/var/log/health.log ./scripts/system_health_monitor.py
+REQUIRED_PROCESSES="sshd,cron" ./scripts/system_health_monitor.py
+./scripts/system_health_monitor.py --json
 ```
 
 Exit code 0 means healthy, 1 means at least one alert, 2 means bad settings.
-The thresholds are environment variables, listed in `--help`.
+Thresholds can be flags or environment variables, listed in `--help`.
 
 ### Access log analyzer
 
@@ -121,6 +122,15 @@ addresses, top 404 paths and the busiest hour.
 ```
 
 It only uses the Python standard library.
+
+## Tests
+
+```
+python3 -m unittest discover -s tests -v
+```
+
+The tests cover the `/proc` parsers, threshold evaluation, exit codes, log
+counters and gzip input. Both scripts are Python 3 standard library only.
 
 ## License
 

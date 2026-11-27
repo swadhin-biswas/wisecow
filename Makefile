@@ -11,11 +11,12 @@ INGRESS_NGINX_VERSION ?= controller-v1.15.1
 
 .DEFAULT_GOAL := help
 
-.PHONY: help build run cluster-up cluster-down deploy wait verify logs clean
+.PHONY: help build run test cluster-up cluster-down deploy wait verify logs clean
 
 help:
 	@echo "build        build the image as $(IMAGE)"
 	@echo "run          run the image on localhost:4499"
+	@echo "test         run the Python tests for the ops scripts"
 	@echo "cluster-up   create the kind cluster, ingress-nginx and cert-manager"
 	@echo "deploy       build, load into kind, apply the local overlay"
 	@echo "verify       fetch the local CA and call the app over HTTPS"
@@ -24,6 +25,9 @@ help:
 
 build:
 	docker build --build-arg GIT_SHA=$$(git rev-parse --short HEAD 2>/dev/null || echo dev) -t $(IMAGE) .
+
+test:
+	python3 -m unittest discover -s tests -v
 
 run: build
 	docker run --rm -p 4499:4499 $(IMAGE)
