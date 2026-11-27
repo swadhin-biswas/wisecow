@@ -103,6 +103,67 @@ jobs:
           provenance: ${{ github.event_name != 'pull_request' }}
           sbom: ${{ github.event_name != 'pull_request' }}
 
+  smoke:
+    name: deploy smoke test
+    needs: build
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    concurrency:
+      group: smoke-${{ github.ref }}
+      cancel-in-progress: true
+    permissions:
+      contents: read
+    steps:
+      - name: Check out
+        uses: actions/checkout@v7
+
+      - name: Install kind and helm
+        run: |
+          if ! command -v kind >/dev/null 2>&1; then
+            curl -fsSLo /tmp/kind https://kind.sigs.k8s.io/dl/v0.33.0/kind-linux-amd64
+            sudo install -m 0755 /tmp/kind /usr/local/bin/kind
+          fi
+          if ! command -v helm >/dev/null 2>&1; then
+            curl -fsSLo /tmp/helm.tar.gz https://get.helm.sh/helm-v4.3.0-linux-amd64.tar.gz
+            tar -xzf /tmp/helm.tar.gz -C /tmp
+            sudo install -m 0755 /tmp/linux-amd64/helm /usr/local/bin/helm
+          fi
+          kind version
+          helm version --short
+
+      - name: Create the cluster and add-ons
+        run: CLUSTER=smoke make cluster-up
+
+      - name: Apply the overlay with the published digest
+        env:
+          IMAGE: ghcr.io/${{ github.repository }}
+          DIGEST: ${{ needs.build.outputs.digest }}
+        run: |
+          if [[ ! "$DIGEST" =~ ^sha256:[0-9a-f]{64}$ ]]; then
+            echo "unexpected digest from the build job: '${DIGEST}'" >&2
+            exit 1
+          fi
+          kubectl kustomize k8s/overlays/local \
+            | sed -E "s#image: (wisecow:local|ghcr\.io/[^[:space:]]+)#image: ${IMAGE}@${DIGEST}#" \
+            | kubectl apply -f -
+          kubectl -n wisecow rollout status deployment/wisecow --timeout=180s
+          kubectl -n wisecow wait --for=condition=Ready certificate/wisecow-tls --timeout=180s
+
+      - name: Verify HTTPS
+        run: make verify
+
+      - name: Show the deployed state
+        if: always()
+        run: |
+          kubectl -n wisecow get pods,svc,ingress,certificate -o wide || true
+          kubectl -n wisecow get deploy wisecow \
+            -o jsonpath='{.spec.template.spec.containers[0].image}{"\n"}' || true
+
+      - name: Clean up
+        if: always()
+        run: kind delete cluster --name smoke || true
+
   deploy:
     name: deploy
     needs: build
@@ -116,33 +177,30 @@ jobs:
       name: production
     permissions:
       contents: read
-    env:
-      DEPLOY_OVERLAY: ${{ vars.DEPLOY_OVERLAY || 'prod' }}
     steps:
       - name: Check out
         uses: actions/checkout@v7
 
-      - name: Apply the manifests
-        run: |
-          case "${DEPLOY_OVERLAY}" in
-            local | prod) ;;
-            *)
-              echo "DEPLOY_OVERLAY must be local or prod, got '${DEPLOY_OVERLAY}'" >&2
-              exit 1
-              ;;
-          esac
-          kubectl apply -k "k8s/overlays/${DEPLOY_OVERLAY}"
-
-      - name: Pin the deployment to the image that was just built
+      - name: Apply the manifests and pin the digest
         env:
+          OVERLAY: ${{ vars.DEPLOY_OVERLAY || 'prod' }}
           IMAGE: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
           DIGEST: ${{ needs.build.outputs.digest }}
         run: |
+          case "$OVERLAY" in
+            local | prod) ;;
+            *)
+              echo "DEPLOY_OVERLAY must be local or prod, got '${OVERLAY}'" >&2
+              exit 1
+              ;;
+          esac
           if [[ ! "$DIGEST" =~ ^sha256:[0-9a-f]{64}$ ]]; then
             echo "unexpected digest from the build job: '${DIGEST}'" >&2
             exit 1
           fi
-          kubectl -n wisecow set image deployment/wisecow "wisecow=${IMAGE}@${DIGEST}"
+          kubectl kustomize "k8s/overlays/${OVERLAY}" \
+            | sed -E "s#image: (wisecow:local|ghcr\.io/[^[:space:]]+)#image: ${IMAGE}@${DIGEST}#" \
+            | kubectl apply -f -
 
       - name: Wait for the rollout
         run: kubectl -n wisecow rollout status deployment/wisecow --timeout=180s

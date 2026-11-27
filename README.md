@@ -1,5 +1,7 @@
 # Wisecow
 
+[![ci-cd](https://github.com/swadhin-biswas/wisecow/actions/workflows/ci-cd.yml/badge.svg)](https://github.com/swadhin-biswas/wisecow/actions/workflows/ci-cd.yml)
+
 Wisecow serves a random fortune through `cowsay` over HTTP. The app is the
 upstream shell script from [nyrahul/wisecow](https://github.com/nyrahul/wisecow);
 this repo adds a container image, Kubernetes manifests, TLS and a GitHub
@@ -75,8 +77,9 @@ manual dispatch.
 1. `lint`: hadolint, Python compile check, unit tests and kubeconform
 2. `build`: Buildx build, push to GHCR with `sha-*`, branch and semver tags,
    provenance and SBOM
-3. `deploy`: apply the selected overlay and pin the deployment to the digest
-   that was just built
+3. `smoke`: deploy the published digest into a throwaway kind cluster on the
+   runner and verify HTTPS
+4. `deploy`: render the selected overlay with the digest and apply it
 
 The deploy job only runs on `main`, and only when the repository variable
 `DEPLOY_ENABLED` is set to `true`. It expects a self-hosted runner on the
