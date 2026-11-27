@@ -11,6 +11,20 @@ Actions pipeline around it.
 client -- 443 --> ingress-nginx -- 80 --> service -- 4499 --> pod
 ```
 
+## Assignment coverage
+
+| Brief item | Implementation |
+| --- | --- |
+| Dockerfile for the app | `Dockerfile` |
+| Kubernetes deployment and Service | `k8s/base/` |
+| TLS | `k8s/base/ingress.yaml`, `k8s/overlays/` |
+| Build and push on change | `lint` and `build` jobs in `.github/workflows/ci-cd.yml` |
+| Automatic deployment | `smoke` job, plus the gated persistent `deploy` job |
+| Public repository | this repository |
+| Part 2 objective 1: health monitor | `scripts/system_health_monitor.py` |
+| Part 2 objective 3: log analyzer | `scripts/log_analyzer.py` |
+| Tests | `tests/test_scripts.py` |
+
 ## Layout
 
 | Path | What it holds |
@@ -21,7 +35,7 @@ client -- 443 --> ingress-nginx -- 80 --> service -- 4499 --> pod
 | `k8s/overlays/local` | kind cluster with a throwaway cert-manager CA |
 | `k8s/overlays/prod` | Let's Encrypt issuer and the public hostname |
 | `scripts/` | system health monitor and access log analyzer |
-| `.github/workflows/ci-cd.yml` | lint, build, push to GHCR, deploy |
+| `.github/workflows/ci-cd.yml` | lint, build, GHCR push, smoke deploy, persistent deploy |
 | `hack/kind-config.yaml` | kind node with ports 8080/8443 mapped to 80/443 |
 
 ## Run the container
@@ -81,9 +95,10 @@ manual dispatch.
    runner and verify HTTPS
 4. `deploy`: render the selected overlay with the digest and apply it
 
-The deploy job only runs on `main`, and only when the repository variable
-`DEPLOY_ENABLED` is set to `true`. It expects a self-hosted runner on the
-machine that holds the kubeconfig.
+The `smoke` job is the end-to-end deploy proof. It runs on GitHub for every
+push to `main`, creates a throwaway kind cluster, deploys the published digest
+and verifies HTTPS. The `deploy` job is the persistent target: it runs on
+`main` when `DEPLOY_ENABLED` is `true` and a self-hosted runner is registered.
 
 | Repository variable | Default | Purpose |
 | --- | --- | --- |
@@ -96,11 +111,16 @@ Images are published as `ghcr.io/swadhin-biswas/wisecow:latest` and
 
 ## Ops scripts
 
+The brief asks for any two objectives. This repo implements objective 1 (system
+health monitoring) and objective 3 (log analysis), both in Python 3.9 or newer
+with no third-party packages.
+
 ### System health monitor
 
-`scripts/system_health_monitor.py` samples CPU over one second, reads memory
-and disk, counts processes and zombies, and writes a single summary line to a
-log. A metric over its threshold becomes an `ALERT` line on stderr as well.
+`scripts/system_health_monitor.py` runs on a Linux host. It samples CPU over one
+second, reads memory and disk, counts processes and zombies, and writes a single
+summary line to a log. A metric over its threshold becomes an `ALERT` line on
+stderr as well.
 
 ```
 ./scripts/system_health_monitor.py
@@ -130,6 +150,8 @@ It only uses the Python standard library.
 ## Tests
 
 ```
+make test
+# or
 python3 -m unittest discover -s tests -v
 ```
 
